@@ -12,16 +12,17 @@ module Lamdu.Data.Expression.IRef
   , DefI, DefIM
   , variableRefGuid
   , addProperties
+  , readPureDefinitionType
   ) where
 
 import Control.Applicative ((<$>), pure)
 import Control.Lens.Operators
+import Control.Monad (void)
 import Control.MonadA (MonadA)
 import Data.Binary (Binary(..))
 import Data.Store.Guid (Guid)
 import Data.Store.IRef (IRef, Tag)
 import Data.Store.Property (Property(..))
-import Data.Store.Transaction (Transaction)
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable)
 import qualified Control.Lens as Lens
@@ -35,7 +36,7 @@ import qualified Lamdu.Data.Expression.Utils as ExprUtil
 type Expression t = Expr.Expression (DefI t)
 type ExpressionM m = Expression (Tag m)
 
-type T = Transaction
+type T = Transaction.Transaction
 
 type DefI t = IRef t (Definition.Body (ExpressionI t))
 type DefIM m = DefI (Tag m)
@@ -158,3 +159,8 @@ addProperties setIRef (Expr.Expression body (iref, a)) =
       <&> (^. Expr.ePayload . Lens._1) -- convert to body of IRefs
       & Lens.element index .~ newIRef
       & writeExprBody iref
+
+readPureDefinitionType :: MonadA m => DefIM m -> T m (ExpressionM m ())
+readPureDefinitionType defI =
+  fmap void . readExpression .
+  (^. Definition.bodyType) =<< Transaction.readIRef defI

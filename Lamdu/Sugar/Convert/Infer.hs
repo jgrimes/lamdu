@@ -36,7 +36,6 @@ module Lamdu.Sugar.Convert.Infer
 import Control.Applicative ((<$>))
 import Control.Lens (Lens')
 import Control.Lens.Operators
-import Control.Monad (void, (<=<))
 import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State (StateT(..), evalStateT)
 import Control.Monad.Trans.State.Utils (toStateT)
@@ -55,8 +54,6 @@ import qualified Control.Lens as Lens
 import qualified Control.Monad.Trans.State as State
 import qualified Data.Cache as Cache
 import qualified Data.Store.Property as Property
-import qualified Data.Store.Transaction as Transaction
-import qualified Lamdu.Data.Definition as Definition
 import qualified Lamdu.Data.Expression as Expr
 import qualified Lamdu.Data.Expression.IRef as ExprIRef
 import qualified Lamdu.Data.Expression.Infer as Infer
@@ -99,10 +96,7 @@ mkExprPure g =
     f a guid = Payload guid Nothing Nothing a
 
 loader :: MonadA m => Infer.Loader (DefIM m) (T m)
-loader =
-  Infer.Loader
-  (fmap void . ExprIRef.readExpression . (^. Definition.bodyType) <=<
-   Transaction.readIRef)
+loader = Infer.Loader ExprIRef.readPureDefinitionType
 
 load ::
   MonadA m => Maybe (DefIM m) ->
