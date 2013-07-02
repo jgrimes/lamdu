@@ -29,6 +29,8 @@ module Lamdu.Data.Expression.Utils
   , isTypeConstructorType
   , addExpressionContexts
   , addBodyContexts
+  , PiWrappers(..), mNonDependentPiParam, dependentPiParams
+  , getPiWrappers
   ) where
 
 import Prelude hiding (pi)
@@ -61,7 +63,7 @@ import qualified System.Random as Random
 
 data PiWrappers def a = PiWrappers
   { _dependentPiParams :: [(Guid, Expression def a)]
-  , mNonDependentPiParam :: Maybe (Guid, Expression def a)
+  , _mNonDependentPiParam :: Maybe (Guid, Expression def a)
   }
 Lens.makeLenses ''PiWrappers
 
@@ -102,7 +104,7 @@ getPiWrappers expr =
     | otherwise ->
         PiWrappers
         { _dependentPiParams = []
-        , mNonDependentPiParam = Just p
+        , _mNonDependentPiParam = Just p
         }
     where
       p = (param, paramType)
@@ -159,7 +161,7 @@ applyForms exprType rawExpr
       scanl (addApply IndependentParamAdded) withDepAppliesAdded $ mNonDepParam ^.. Lens._Just
     PiWrappers
       { _dependentPiParams = depParams
-      , mNonDependentPiParam = mNonDepParam
+      , _mNonDependentPiParam = mNonDepParam
       } = getPiWrappers exprType
     addApply ann func (_, paramType) =
       Expression (makeApply func arg) ann

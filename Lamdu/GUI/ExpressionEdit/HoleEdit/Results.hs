@@ -24,13 +24,14 @@ import Data.Maybe (catMaybes, fromMaybe)
 import Data.Maybe.Utils (maybeToMPlus)
 import Data.Monoid (Monoid(..))
 import Data.Store.Transaction (Transaction)
-import Data.Traversable (traverse)
+import Data.Traversable (traverse, sequenceA)
 import Lamdu.Config (Config)
 import Lamdu.Data.Expression (Expression(..))
 import Lamdu.Data.Expression.IRef (DefIM)
 import Lamdu.Data.Expression.Utils (ApplyFormAnnotation(..), pureHole)
 import Lamdu.GUI.ExpressionEdit.ExpressionGui.Monad (ExprGuiM, WidgetT)
 import Lamdu.GUI.ExpressionEdit.HoleEdit.Info (HoleInfo(..), hiSearchTerm, hiMArgument)
+import Lamdu.Sugar.Convert.Expression (getStoredName)
 import Lamdu.Sugar.Types (Scope(..))
 import qualified Control.Lens as Lens
 import qualified Data.Char as Char
@@ -88,8 +89,28 @@ data ResultsList m = ResultsList
   }
 Lens.makeLenses ''ResultsList
 
-getVarsToGroup :: (Sugar.GetVar Sugar.Name m, Expression def ()) -> Group def
-getVarsToGroup (getVar, expr) = sugarNameToGroup (getVar ^. Sugar.gvName) expr
+getVarsToGroup ::
+  MonadA m =>
+  (Sugar.GetVar Sugar.Name m, Expression (DefIM m) ()) ->
+  T m (GroupM m)
+getVarsToGroup (getVar, expr) = do
+  extraStrings <-
+    case expr ^? ExprLens.exprDefinitionRef of
+    Just defI -> do
+      defType <- ExprIRef.readPureDefinitionType defI
+      let
+        fieldTags =
+          ExprUtil.getPiWrappers defType ^..
+          ExprUtil.mNonDependentPiParam . Lens._Just . Lens._2 .
+          ExprLens.exprKindedRecordFields Expr.KType .
+          traverse . Lens._1 . ExprLens.exprTag
+      catMaybes <$> traverse getStoredName fieldTags
+    Nothing -> pure []
+  group
+    & groupNames <>~ extraStrings
+    & return
+  where
+    group = sugarNameToGroup (getVar ^. Sugar.gvName) expr
 
 tagsToGroup :: (Sugar.TagG Sugar.Name, Expression def ()) -> Group def
 tagsToGroup (tagG, expr) = sugarNameToGroup (tagG ^. Sugar.tagName) expr
@@ -366,15 +387,16 @@ makeAllGroups holeInfo = do
     , _scopeGetParams = getParams
     } <- hiActions holeInfo ^. Sugar.holeScope
   let
-    allGroups = concat
-      [ primitiveGroups holeInfo, literalGroups
-      , localsGroups, globalsGroups, tagsGroups, getParamsGroups
-      ]
-    sortedGroups f  = sortOn (^. groupNames) . map f
+    sortedGroups f  = fmap (sortOn (^. groupNames)) . traverse f
     localsGroups    = sortedGroups getVarsToGroup locals
     globalsGroups   = sortedGroups getVarsToGroup globals
-    tagsGroups      = sortedGroups tagsToGroup tags
-    getParamsGroups = sortedGroups getParamsToGroup getParams
+    tagsGroups      = sortedGroups (pure . tagsToGroup) tags
+    getParamsGroups = sortedGroups (pure . getParamsToGroup) getParams
+  allGroups <-
+    (primitiveGroups holeInfo ++) .
+    (literalGroups ++) . concat <$> sequenceA
+    [ localsGroups, globalsGroups, tagsGroups, getParamsGroups
+    ]
   pure $ holeMatches (^. groupNames) (hiSearchTerm holeInfo) allGroups
   where
     literalGroups = makeLiteralGroups (hiSearchTerm holeInfo)
