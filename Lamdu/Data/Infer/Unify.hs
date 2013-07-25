@@ -10,7 +10,6 @@ import Control.Monad.Trans.State (state)
 import Data.Foldable (traverse_)
 import Data.Map (Map)
 import Data.Map.Utils (lookupOrSelf)
-import Data.Maybe (fromMaybe)
 import Data.Maybe.Utils (unsafeUnjust)
 import Data.Monoid (Monoid(..))
 import Data.Set (Set)
@@ -91,34 +90,40 @@ mergeScopeBodies ::
   Map Guid Guid ->
   Scope -> Expr.Body def Ref ->
   Scope -> Expr.Body def Ref ->
-  Infer def (Scope, Expr.Body def Ref)
+  Infer def (Scope, Expr.Body def Ref, Infer def ())
 mergeScopeBodies recurse renames xScope xBody yScope yBody = do
   intersectedScope <- intersectScopes xScope yScope
   let
     unifyWithHole activeRenames holeScope otherScope nonHoleBody
       | Set.null unusableScopeSet && Map.null renames =
-        return (intersectedScope, nonHoleBody)
-      | otherwise =
-        applyHoleConstraints (recurse activeRenames) (HoleConstraints unusableScopeSet)
-        nonHoleBody intersectedScope
-        <&> flip (,) nonHoleBody
+        return (intersectedScope, nonHoleBody, return ())
+      | otherwise = do
+        (scope, action) <-
+          applyHoleConstraints (recurse activeRenames) (HoleConstraints unusableScopeSet)
+          nonHoleBody intersectedScope
+        return (scope, nonHoleBody, action)
       where
         unusableScopeSet = makeUnusableScopeSet holeScope otherScope
   case (xBody, yBody) of
     (_, Expr.BodyLeaf Expr.Hole) -> unifyWithHole renames   yScope xScope xBody
     (Expr.BodyLeaf Expr.Hole, _) -> unifyWithHole Map.empty xScope yScope yBody
     _ ->
-      fmap ((,) intersectedScope) .
-      fromMaybe (InferM.error (Mismatch xBody yBody)) $
-      sequenceA <$> ExprUtil.matchBody matchLamResult matchOther (==) xBody yBody
+      case ExprUtil.matchBody matchLamResult matchOther (==) xBody yBody of
+      Nothing -> InferM.error (Mismatch xBody yBody)
+      Just bodyActions ->
+        return
+        ( intersectedScope
+        , fst <$> bodyActions
+        , Lens.sequenceOf_ (Lens.traverse . Lens._2) bodyActions
+        )
   where
     makeUnusableScopeSet holeScope otherScope =
       Map.keysSet $ Map.difference
       (otherScope ^. scopeMap)
       (holeScope ^. scopeMap)
     matchLamResult xGuid yGuid xRef yRef =
-      (yGuid, recurse (renames & Lens.at xGuid .~ Just yGuid) xRef (UnifyRef yRef))
-    matchOther xRef yRef = recurse renames xRef (UnifyRef yRef)
+      (yGuid, (xRef, recurse (renames & Lens.at xGuid .~ Just yGuid) xRef (UnifyRef yRef)))
+    matchOther xRef yRef = (xRef, recurse renames xRef (UnifyRef yRef))
 
 renameAppliedPiResult :: Map Guid Guid -> AppliedPiResult -> AppliedPiResult
 renameAppliedPiResult renames (AppliedPiResult piGuid argVal destRef copiedNames) =
@@ -151,18 +156,18 @@ renameRefData renames RefData {..}
 mergeRefData ::
   Eq def =>
   (Map Guid Guid -> Ref -> UnifyPhase -> Infer def Ref) ->
-  Map Guid Guid -> RefData def -> RefData def -> Infer def (Bool, RefData def)
+  Map Guid Guid -> RefData def -> RefData def ->
+  Infer def (Bool, RefData def, Infer def ())
 mergeRefData recurse renames
   (RefData aScope aMRenameHistory aRelations aIsCircumsized aTriggers aBody)
   (RefData bScope bMRenameHistory bRelations bIsCircumsized bTriggers bBody) =
-  mkRefData
-  <$> mergeScopeBodies recurse renames aScope aBody bScope bBody
+  mkRefData <$> mergeScopeBodies recurse renames aScope aBody bScope bBody
   where
     bodyIsUpdated =
       Lens.has ExprLens.bodyHole aBody /=
       Lens.has ExprLens.bodyHole bBody
     mergedRelations = aRelations ++ bRelations
-    mkRefData (intersectedScope, mergedBody) =
+    mkRefData (intersectedScope, mergedBody, action) =
       ( bodyIsUpdated
       , RefData
         { _rdScope = intersectedScope
@@ -172,6 +177,7 @@ mergeRefData recurse renames
         , _rdTriggers = IntMap.unionWith mappend aTriggers bTriggers
         , _rdBody = mergedBody
         }
+      , action
       )
 
 renameMergeRefData ::
@@ -180,24 +186,24 @@ renameMergeRefData ::
   Ref -> Map Guid Guid -> RefData def -> RefData def ->
   Infer def ()
 renameMergeRefData recurse rep renames a b = do
-  (bodyIsUpdated, mergedRefData) <-
+  (bodyIsUpdated, mergedRefData, action) <-
     mergeRefData recurse renames (renameRefData renames a) b
     >>= Lens._2 %%~ Trigger.updateRefData rep
   -- First let's write the mergedRefData so we're not in danger zone
   -- of reading missing data:
   InferM.liftExprRefs $ ExprRefs.write rep mergedRefData
+  action
   -- Now we can safely run the relations
   when bodyIsUpdated $ InferM.rerunRelations rep
 
 applyHoleConstraints ::
   (Ref -> UnifyPhase -> Infer def dummy) -> HoleConstraints ->
-  Expr.Body def Ref -> Scope -> Infer def Scope
+  Expr.Body def Ref -> Scope -> Infer def (Scope, Infer def ())
 applyHoleConstraints recurse holeConstraints body oldScope = do
   newScope <-
     InferM.liftError $
     checkHoleConstraints holeConstraints body oldScope
-  traverse_ (`recurse` UnifyHoleConstraints holeConstraints) body
-  return newScope
+  return (newScope, traverse_ (`recurse` UnifyHoleConstraints holeConstraints) body)
 
 unifyRecurse :: Eq def => Set Ref -> Map Guid Guid -> Ref -> UnifyPhase -> Infer def Ref
 unifyRecurse visited renames rawNode phase = do
@@ -211,11 +217,13 @@ unifyRecurse visited renames rawNode phase = do
       InferM.liftExprRefs . ExprRefs.writeRep nodeRep $
         error "Reading node during write..."
       let midRefData = renameRefData renames oldNodeData
+      (newScope, action) <-
+        applyHoleConstraints (recurse nodeRep renames) holeConstraints
+        (midRefData ^. rdBody) (midRefData ^. rdScope)
+      action
       midRefData
-        & rdScope %%~
-          applyHoleConstraints (recurse nodeRep renames) holeConstraints
-          (midRefData ^. rdBody)
-        >>= InferM.liftExprRefs . ExprRefs.writeRep nodeRep
+        & rdScope .~ newScope
+        & InferM.liftExprRefs . ExprRefs.writeRep nodeRep
       return nodeRep
     UnifyRef other -> do
       (rep, unifyResult) <- InferM.liftExprRefs $ ExprRefs.unifyRefs nodeRep other
