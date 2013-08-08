@@ -81,7 +81,7 @@ makeApplyTV scope apply@(Expr.Apply func arg) = do
     (func ^. Infer.stvTV . Infer.tvType)
   void $ unify (arg ^. Infer.stvTV . Infer.tvType) piParamType
   applyTypeRef <- freshHole scope
-  RuleApply.make piGuid (arg ^. Infer.stvTV . Infer.tvVal) piResultRef applyTypeRef
+  RuleApply.make piGuid (arg ^. Infer.stvTV) piResultRef applyTypeRef
   maybeCircumsize
     scope
     (func ^. Infer.stvTV)

@@ -4,7 +4,7 @@ module Lamdu.Data.Infer.Rule.Types
   , GetFieldPhase0(..), gf0GetFieldTag, gf0GetFieldType
   , GetFieldPhase1(..), gf1GetFieldRecordTypeFields, gf1GetFieldType
   , GetFieldPhase2(..), gf2Tag, gf2TagRef, gf2TypeRef, gf2MaybeMatchers
-  , Apply(..), aPiGuid, aArgVal, aLinkedExprs, aLinkedNames
+  , Apply(..), aPiGuid, aArgVal, aRigidity, aLinkedExprs, aLinkedNames
   , Uncircumsize(..), uValRef, uApplicantValRef, uUncircumsizedBody
   , Rule(..), ruleTriggersIn, ruleContent
   , RuleContent(..)
@@ -19,6 +19,7 @@ import Control.MonadA (MonadA)
 import Data.Monoid (Monoid(..))
 import Data.Store.Guid (Guid)
 import Lamdu.Data.Infer.RefTags (ExprRef, TagExpr, RuleRef, TagRule, ParamRef, TagParam)
+import Lamdu.Data.Infer.Rule.Types.Rigidity (Rigidity)
 import qualified Control.Lens as Lens
 import qualified Data.OpaqueRef as OR
 import qualified Lamdu.Data.Expression as Expr
@@ -54,6 +55,7 @@ Lens.makeLenses ''GetFieldPhase2
 data Apply def = Apply
   { _aPiGuid :: Guid
   , _aArgVal :: ExprRef def
+  , _aRigidity :: Rigidity def
   -- unmaintained pi-result to apply type respective/matching subexprs
   , _aLinkedExprs :: OR.RefMap (TagExpr def) (ExprRef def)
   , _aLinkedNames :: OR.RefMap (TagParam def) (ParamRef def)

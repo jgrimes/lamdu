@@ -24,6 +24,7 @@ import qualified Lamdu.Data.Expression.Lens as ExprLens
 import qualified Lamdu.Data.Expression.Utils as ExprUtil
 import qualified Lamdu.Data.Infer.GuidAliases as GuidAliases
 import qualified Lamdu.Data.Infer.Monad as InferM
+import qualified Lamdu.Data.Infer.Rule.Apply.Rigidity as Rigidity
 import qualified Lamdu.Data.Infer.Rule.Monad as RuleMonad
 import qualified Lamdu.Data.Infer.Rule.Types as Rule
 import qualified Lamdu.Data.Infer.Trigger as Trigger
@@ -156,17 +157,23 @@ execute ruleRef =
       -- Some of our sources were potentially unified, so
       -- normalizeSrcLinks will find them and unify the dests
       normalizeSrcLinks
+    handleTrigger (srcRef, Trigger.FiredKnownBody knownBody) =
+      Rigidity.firedKnownBody srcRef knownBody
     handleTrigger firings = error $ "handleTrigger called with: " ++ show firings
 
-make :: Guid -> ExprRef def -> ExprRef def -> ExprRef def -> Infer def ()
-make piGuid argValRef piResultRef applyTypeRef = do
+make :: Guid -> TypedValue def -> ExprRef def -> ExprRef def -> Infer def ()
+make piGuid argTV piResultRef applyTypeRef = do
   ruleRef <-
     InferM.liftRuleMap . Rule.new $
     Rule.RuleApply Rule.Apply
     { Rule._aPiGuid = piGuid
-    , Rule._aArgVal = argValRef
+    , Rule._aArgVal = argTV ^. tvVal
+    , Rule._aRigidity = initialRigidity
     , Rule._aLinkedExprs = OR.refMapSingleton piResultRef applyTypeRef
     , Rule._aLinkedNames = OR.refMapEmpty
     }
   piGuidRep <- InferM.liftGuidAliases $ GuidAliases.getRep piGuid
   addPiResultTriggers ruleRef piGuidRep piResultRef
+  addRigidityTriggers ruleRef
+  where
+    (addRigidityTriggers, initialRigidity) = Rigidity.initial argTV
