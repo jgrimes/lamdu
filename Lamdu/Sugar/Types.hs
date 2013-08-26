@@ -78,13 +78,11 @@ import Data.Store.IRef (Tag)
 import Data.Traversable (Traversable)
 import Data.Typeable (Typeable)
 import Lamdu.Data.Expression (Kind(..))
-import Lamdu.Data.Expression.IRef (DefIM)
 import Lamdu.Sugar.Types.Internal (T, CT, Stored, InferredWC)
 import qualified Control.Lens as Lens
 import qualified Data.List as List
 import qualified Lamdu.Data.Definition as Definition
 import qualified Lamdu.Data.Expression.IRef as ExprIRef
-import qualified Lamdu.Data.Expression.Infer as Infer
 import qualified Lamdu.Sugar.Types.Internal as TypesInternal
 import qualified System.Random as Random
 
@@ -118,7 +116,7 @@ data Actions m = Actions
   }
 
 data Payload name m a = Payload
-  { _plInferredTypes :: [Expression name m ()]
+  { _plInferredTypes :: [Expression name m ()] -- TODO: Use Maybe, not []
   -- This must be embedded in the expression AST and not as a separate
   -- function so that AddNames can correct the "name" here in the
   -- right context.
@@ -197,7 +195,7 @@ data PickedResult = PickedResult
   }
 
 data HoleResult name m a = HoleResult
-  { _holeResultInferred :: ExprIRef.ExpressionM m (Infer.Inferred (DefIM m))
+  { _holeResultInferred :: ExprIRef.ExpressionM m (InferredWC m)
   , _holeResultConverted :: Expression name m a
   , _holeResultPick :: T m PickedResult
   , _holeResultHasHoles :: Bool

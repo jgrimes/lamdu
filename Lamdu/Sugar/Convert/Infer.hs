@@ -43,7 +43,7 @@ import Data.Store.Guid (Guid)
 import Data.Store.IRef (Tag)
 import Data.Typeable (Typeable, Typeable1)
 import Lamdu.Data.Expression.IRef (DefIM)
-import Lamdu.Data.Expression.Infer.Conflicts (InferredWithConflicts(..), inferWithConflicts)
+import Lamdu.Data.Infer.Load (Loader(..), LoadedDef)
 import Lamdu.Sugar.Types.Internal
 import System.Random (RandomGen)
 import qualified Control.Lens as Lens
@@ -54,26 +54,29 @@ import qualified Data.Store.Transaction as Transaction
 import qualified Lamdu.Data.Definition as Definition
 import qualified Lamdu.Data.Expression as Expr
 import qualified Lamdu.Data.Expression.IRef as ExprIRef
-import qualified Lamdu.Data.Expression.Infer as Infer
-import qualified Lamdu.Data.Expression.Infer.ImplicitVariables as ImplicitVariables
-import qualified Lamdu.Data.Expression.Infer.Structure as Structure
 import qualified Lamdu.Data.Expression.Load as Load
 import qualified Lamdu.Data.Expression.Utils as ExprUtil
+import qualified Lamdu.Data.Infer as Infer
+import qualified Lamdu.Data.Infer.Deref as InferDeref
+import qualified Lamdu.Data.Infer.ImplicitVariables as ImplicitVariables
+import qualified Lamdu.Data.Infer.Load as InferLoad
 import qualified Lamdu.Sugar.Types as Sugar
 
 type ExpressionSetter def = Expr.Expression def () -> Expr.Expression def ()
 
-loader :: MonadA m => Infer.Loader (DefIM m) (T m)
+loader :: MonadA m => Loader (DefIM m) (T m)
 loader =
-  Infer.Loader
-  (fmap void . ExprIRef.readExpression . (^. Definition.bodyType) <=<
-   Transaction.readIRef)
+  Loader
+  { loadDefType =
+    fmap void . ExprIRef.readExpression . (^. Definition.bodyType) <=<
+    Transaction.readIRef
+  }
 
 load ::
   MonadA m => Maybe (DefIM m) ->
   ExprIRef.ExpressionM m a ->
-  T m (Infer.Loaded (DefIM m) a)
-load = Infer.load loader
+  T m (Expr.Expression (LoadedDef def) a)
+load = InferLoad.load loader
 
 memoBy ::
   (Cache.Key k, Binary v, Typeable v, MonadA m) =>
@@ -97,21 +100,20 @@ memoLoadInfer ::
   (MonadA m, Typeable1 m, Cache.Key a, Binary a) =>
   Maybe (DefIM m) ->
   ExprIRef.ExpressionM m a ->
-  Infer.Node (DefIM m) ->
+  Infer.ScopedTypedValue (DefIM m) ->
   StateT (InferContext m) (MaybeT (CT m))
-  (ExprIRef.ExpressionM m (Infer.Inferred (DefIM m), a))
+  (ExprIRef.ExpressionM m (InferDeref.DerefedSTV (DefIM m), a))
 memoLoadInfer mDefI expr node = do
   loaded <- lift . lift . lift $ load mDefI expr
   icHashKey %= Cache.bsOfKey . (,,) loaded node
   k <- Lens.use icHashKey
   Lens.zoom icContext $
     StateT . fmap (MaybeT . pureMemoBy "memoLoadInfer" k) . runStateT $
-    Infer.inferLoaded (Infer.InferActions (const Nothing))
-    loaded node
+    Infer.infer loaded node
 
 inferWithVariables ::
   (RandomGen g, MonadA m) => g ->
-  Infer.Loaded (DefIM m) a -> Infer.Context (DefIM m) -> Infer.Node (DefIM m) ->
+  Infer.Loaded (DefIM m) a -> Infer.Context (DefIM m) -> Infer.ScopedTypedValue (DefIM m) ->
   T m
   ( ( Infer.Context (DefIM m)
     , ExprIRef.ExpressionM m (InferredWithConflicts (DefIM m), a)
@@ -163,7 +165,7 @@ inferAddImplicits ::
   (RandomGen g, MonadA m, Typeable1 m, Typeable (m ())) => g ->
   Maybe (DefIM m) ->
   ExprIRef.ExpressionM m (Load.ExprPropertyClosure (Tag m)) ->
-  InferContext m -> Infer.Node (DefIM m) -> CT m (InferredWithImplicits m ())
+  InferContext m -> Infer.ScopedTypedValue (DefIM m) -> CT m (InferredWithImplicits m ())
 inferAddImplicits gen mDefI lExpr (InferContext inferContext inferContextKey) node = do
   loaded <- lift $ load mDefI lExpr
   let inputKey = Cache.bsOfKey (loaded, inferContextKey, node)

@@ -19,7 +19,6 @@ import Data.Store.IRef (Tag)
 import Data.Traversable (traverse)
 import Data.Typeable (Typeable1)
 import Lamdu.Data.Expression.IRef (DefIM)
-import Lamdu.Data.Expression.Infer.Conflicts (InferredWithConflicts(..))
 import Lamdu.Sugar.Convert.Monad (ConvertM, Context(..))
 import Lamdu.Sugar.Internal
 import Lamdu.Sugar.Types
@@ -37,10 +36,10 @@ import qualified Lamdu.Data.Anchors as Anchors
 import qualified Lamdu.Data.Definition as Definition
 import qualified Lamdu.Data.Expression as Expr
 import qualified Lamdu.Data.Expression.IRef as ExprIRef
-import qualified Lamdu.Data.Expression.Infer as Infer
 import qualified Lamdu.Data.Expression.Lens as ExprLens
 import qualified Lamdu.Data.Expression.Load as Load
 import qualified Lamdu.Data.Expression.Utils as ExprUtil
+import qualified Lamdu.Data.Infer as Infer
 import qualified Lamdu.Data.Ops as DataOps
 import qualified Lamdu.Sugar.Convert.Apply as ConvertApply
 import qualified Lamdu.Sugar.Convert.Expression as ConvertExpr
