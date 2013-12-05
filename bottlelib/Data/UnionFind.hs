@@ -49,8 +49,10 @@ freshRef = do
 find :: MonadA m => Ref p -> StateT (UnionFind p) m (Ref p)
 find ref =
   OpaqueRef.unsafeFromInt .
-  unsafeUnjust ("UnionFind.find: Not found: " ++ show ref) <$>
-  (ufState . IDS.lookup . OpaqueRef.unsafeAsInt) ref
+  unsafeUnjust ("UnionFind.find: Not found: R" ++ show refInt) <$>
+  (ufState . IDS.lookup) refInt
+  where
+    refInt = OpaqueRef.unsafeAsInt ref
 
 union :: MonadA m => Ref p -> Ref p -> StateT (UnionFind p) m (Ref p)
 union x y =

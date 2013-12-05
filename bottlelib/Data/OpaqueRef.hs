@@ -69,8 +69,8 @@ newtype RefMap p v = RefMap (IntMap v)
   deriving (Functor, Foldable, Traversable, Monoid, Show)
 derive makeBinary ''RefMap
 
-instance Show (Ref p) where
-  show (MkRef x) = 'R':show x
+instance Show p => Show (Ref p) where
+  show (MkRef x) = concat ["R(", show (undefined :: p), ")", show x]
 
 refMapEmpty :: RefMap p v
 refMapEmpty = RefMap IntMap.empty

@@ -25,6 +25,7 @@ import Lamdu.Data.Infer.TypedValue (TypedValue(..), tvVal, tvType)
 import qualified Control.Lens as Lens
 import qualified Data.UnionFind.WithData as UFData
 import qualified Lamdu.Data.Expression as Expr
+import qualified Lamdu.Data.Expression.Lens as ExprLens
 import qualified Lamdu.Data.Infer.Context as Context
 import qualified Lamdu.Data.Infer.GuidAliases as GuidAliases
 import qualified Lamdu.Data.Infer.Load as Load
@@ -33,6 +34,9 @@ import qualified Lamdu.Data.Infer.Monad.Run as InferMRun
 import qualified Lamdu.Data.Infer.RefData as RefData
 import qualified Lamdu.Data.Infer.Unify as Unify
 import qualified System.Random as Random
+
+import Control.Monad
+import Debug.TraceUtils
 
 -- Renamed for export purposes
 emptyContext :: Random.StdGen -> Context def
@@ -64,7 +68,10 @@ infer ::
   Scope def ->
   Expr.Expression (Load.LoadedDef def) a ->
   M def (Expr.Expression (Load.LoadedDef def) (TypedValue def, a))
-infer scope expr = InferMRun.run $ exprIntoSTV scope expr
+infer scope expr =
+    InferMRun.run
+  -- . fmap (traceIdVia (fmap fst . (ExprLens.exprDef %~ (^. RefData.ldType))) "STV expr to infer")
+  $ exprIntoSTV scope expr
 
 inferAt ::
   Ord def =>
@@ -83,7 +90,7 @@ inferAt tv expr = do
 exprIntoSTV ::
   Ord def => Scope def -> Expr.Expression (Load.LoadedDef def) a ->
   Infer def (Expr.Expression (Load.LoadedDef def) (TypedValue def, a))
-exprIntoSTV scope (Expr.Expression body pl) = do
+exprIntoSTV scope inexpr@(Expr.Expression body pl) = do
   bodySTV <-
     case body of
     Expr.BodyLam (Expr.Lam k paramGuid paramType result) -> do
@@ -99,4 +106,7 @@ exprIntoSTV scope (Expr.Expression body pl) = do
     _ ->
       body & Lens.traverse %%~ exprIntoSTV scope
   tv <- bodySTV <&> (^. Expr.ePayload . Lens._1) & makeTV scope
-  pure $ Expr.Expression bodySTV (tv, pl)
+  let outexpr = Expr.Expression bodySTV (tv, pl)
+  tracePutStrLn $ "exprIntoSTV: " ++ show (inexpr & void & ExprLens.exprDef %~ (^. RefData.ldType))
+  tracePutStrLn $ "-----------> " ++ show (outexpr <&> fst & ExprLens.exprDef %~ (^. RefData.ldType))
+  pure outexpr

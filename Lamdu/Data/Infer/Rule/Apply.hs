@@ -30,6 +30,8 @@ import qualified Lamdu.Data.Infer.Rule.Types as Rule
 import qualified Lamdu.Data.Infer.Trigger as Trigger
 import qualified Lamdu.Data.Infer.Unify as Unify
 
+import Debug.TraceUtils
+
 unify :: Ord def => ExprRef def -> ExprRef def -> RuleMonad.RM rule def (ExprRef def)
 unify x y = RuleMonad.liftInfer $ Unify.unify x y
 
@@ -97,6 +99,8 @@ link ruleRef srcRef dstRef = do
       -- This src is unified with a src that was already copied somewhere:
       void $ unify dstRef oldDestRef
     Nothing -> do
+      mDstDstRef <- mFindDestRef dstRef
+      tracePutStrLn $ "linking " ++ show srcRef ++ " to " ++ show dstRef ++ " no link existed from this src. dst is itself a src to: " ++ show mDstDstRef
       Rule.aLinkedExprs <>= OR.refMapSingleton srcRef dstRef
       piGuidRep <- RuleMonad.liftInfer . InferM.liftGuidAliases . GuidAliases.getRep =<< Lens.use Rule.aPiGuid
       RuleMonad.liftInfer $ addPiResultTriggers ruleRef piGuidRep srcRef dstRef
@@ -134,8 +138,8 @@ makePiResultCopy ruleRef srcRef destRef = do
       (srcGuid, link ruleRef srcChildRef destChildRef)
 
 execute :: Ord def => Rule.RuleRef def -> Rule.Apply def -> RuleFunc def
-execute ruleRef =
-  RuleMonad.run Rule.RuleApply handleTrigger
+execute ruleRef fireds =
+  RuleMonad.run Rule.RuleApply handleTrigger (trace ("Apply.execute: " ++ show ruleRef ++ " " ++ show fireds) fireds)
   where
     findDestRef =
       fmap (unsafeUnjust "Trigger.IsTheParameterRef not on src?!") . mFindDestRef

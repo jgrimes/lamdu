@@ -47,8 +47,8 @@ data VariableRef def
   deriving (Eq, Ord, Functor, Foldable, Traversable, Typeable)
 
 instance Show def => Show (VariableRef def) where
-  showsPrec _ (ParameterRef paramId) = shows paramId
-  showsPrec _ (DefinitionRef defI) = shows defI
+  showsPrec _ (ParameterRef paramId) = showString "V(" . shows paramId . showString ")"
+  showsPrec _ (DefinitionRef defI) = showString "D(" . shows defI . showString ")"
 
 data Leaf def
   = GetVariable !(VariableRef def)

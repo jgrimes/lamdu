@@ -37,6 +37,8 @@ import qualified Lamdu.Data.Infer.Monad as InferM
 import qualified Lamdu.Data.Infer.RefData as RefData
 import qualified Lamdu.Data.Infer.Trigger as Trigger
 
+import Debug.TraceUtils
+
 newRandom :: Random r => Infer def r
 newRandom = InferM.liftContext . Lens.zoom Context.randomGen $ state random
 
@@ -269,6 +271,10 @@ unifyRecurse xRef yRef =
         uInfer $ fireUnificationTriggers yRep (yData ^. RefData.rdTriggers) xRep
         (mergedRefData, later) <-
           wuRun $ mergeRefDataAndTrigger rep (xRep, xData) (yRep, yData)
+        tracePutStrLn $ concat ["U  ", show xRep, " & ", show yRep, " => ", show rep]
+        tracePutStrLn $ concat ["OF ", show (xData ^. RefData.rdBody & ExprLens.bodyDef %~ (^. RefData.ldType))]
+        tracePutStrLn $ concat [" & ", show (yData ^. RefData.rdBody & ExprLens.bodyDef %~ (^. RefData.ldType))]
+        tracePutStrLn $ concat ["==>", show (mergedRefData ^. RefData.rdBody & ExprLens.bodyDef %~ (^. RefData.ldType))]
         -- First let's write the mergedRefData so we're not in danger zone
         -- of reading missing data:
         uInfer . InferM.liftUFExprs $ UFData.write rep mergedRefData

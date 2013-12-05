@@ -29,6 +29,8 @@ import qualified Lamdu.Data.Infer.Monad as InferM
 import qualified Lamdu.Data.Infer.RefData as RefData
 import qualified Lamdu.Data.Infer.Rule.Types as Rule
 
+import Debug.TraceUtils
+
 remember ::
   MonadA m =>
   ExprRef def -> [RefData.Restriction def] ->
@@ -95,7 +97,9 @@ handleTrigger rep refData ruleId trigger = do
   mRes <- checkTrigger refData trigger
   case mRes of
     Nothing -> return True
-    Just fired -> False <$ InferM.ruleTrigger ruleId rep fired
+    Just fired -> do
+      tracePutStrLn $ "Fired trigger " ++ show trigger ++ " to " ++ show fired
+      False <$ InferM.ruleTrigger ruleId rep fired
 
 -- | Must be called with RefData with normalized scope
 updateRefData :: ExprRef def -> RefData def -> Infer def (RefData def)

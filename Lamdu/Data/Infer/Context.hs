@@ -30,6 +30,8 @@ import qualified Lamdu.Data.Infer.RefData as RefData
 import qualified System.Random as Random
 import System.Random.Utils () -- Binary StdGen
 
+import Debug.TraceUtils
+
 -- Context
 data Context def = Context
   { _ufExprs :: UFExprs def
@@ -88,6 +90,8 @@ freshData :: (Ord def, MonadA m) => RefData def -> StateT (Context def) m (ExprR
 freshData refData = do
   rep <- Lens.zoom ufExprs $ UFData.fresh refData
   addToVisibility (rep, refData)
+  tracePutStrLn $ unwords
+    ["Fresh:", show rep, " = ", show (refData ^. RefData.rdBody & ExprLens.bodyDef %~ (^. RefData.ldType))]
   return rep
 
 fresh ::

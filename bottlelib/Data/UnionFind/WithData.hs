@@ -54,13 +54,13 @@ fresh dat = do
 find :: MonadA m => Ref p -> StateT (UFData p a) m (Ref p)
 find = Lens.zoom ufdUF . UF.find
 
-readRep :: Ref p -> UFData p a -> a
+readRep :: Show p => Ref p -> UFData p a -> a
 readRep rep ufData =
   unsafeUnjust ("readRep: missing ref: " ++ show rep) $
   ufData ^. ufdData . Lens.at rep
 
 popRep ::
-  MonadA m => Ref p -> StateT (UFData p a) m a
+  (MonadA m, Show p) => Ref p -> StateT (UFData p a) m a
 popRep rep =
   Lens.zoom (ufdData . Lens.at rep) $
   unsafeUnjust ("popRep: missing ref: " ++ show rep)
@@ -70,8 +70,7 @@ writeRep ::
   Monad m => Ref p -> a -> StateT (UFData p a) m ()
 writeRep rep dat = ufdData . Lens.at rep .= Just dat
 
-read ::
-  MonadA m => Ref p -> StateT (UFData p a) m a
+read :: (MonadA m, Show p) => Ref p -> StateT (UFData p a) m a
 read ref = State.gets . readRep =<< find ref
 
 write ::
@@ -79,7 +78,7 @@ write ::
 write ref dat = (`writeRep` dat) =<< find ref
 
 modify ::
-  MonadA m => Ref p -> (a -> a) ->
+  (MonadA m, Show p) => Ref p -> (a -> a) ->
   StateT (UFData p a) m ()
 modify ref f = write ref . f =<< read ref
 
@@ -94,7 +93,7 @@ data UnifyRefsResult a
   | UnifyRefsUnified a a
 
 unifyRefs ::
-  MonadA m => Ref p -> Ref p ->
+  (MonadA m, Show p) => Ref p -> Ref p ->
   StateT (UFData p a) m (Ref p, UnifyRefsResult a)
 unifyRefs x y = do
   xRep <- find x
