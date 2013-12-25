@@ -1,9 +1,10 @@
+-- TODO: Remove this module, use trivial UF directly
 {-# LANGUAGE TemplateHaskell #-}
 module Lamdu.Data.Infer.GuidAliases
   ( GuidAliases, getRep, unify, empty, guidOfRep, find, hasGuid
   ) where
 
-import Control.Applicative ((<$>), Applicative(..), (<$))
+import Control.Applicative ((<$>), Applicative(..))
 import Control.Lens.Operators
 import Control.Monad (when)
 import Control.Monad.Trans.State (StateT)
@@ -14,11 +15,11 @@ import Data.Store.Guid (Guid)
 import Data.UnionFind.WithData (UFData)
 import Lamdu.Data.Infer.RefTags (ParamRef, TagParam)
 import qualified Control.Lens as Lens
-import qualified Control.Monad.Trans.State as State
 import qualified Data.Map as Map
 import qualified Data.UnionFind.WithData as UFData
 
 data GuidAliases def = GuidAliases
+  -- TODO: Replace with a data-less union-find (no Guids)
   { _gaUF :: UFData (TagParam def) Guid -- Representative Guid
   , _gaGuidRefs :: Map Guid (ParamRef def)
   }
@@ -53,17 +54,14 @@ getRep guid = do
 hasGuid :: Guid -> GuidAliases def -> Bool
 hasGuid guid aliases = Map.member guid (aliases ^. gaGuidRefs)
 
-unify :: MonadA m => Guid -> Guid -> StateT (GuidAliases def) m (ParamRef def, Guid)
-unify x y = do
-  xRep <- getRep x
-  yRep <- getRep y
+unify :: MonadA m => ParamRef def -> ParamRef def -> StateT (GuidAliases def) m (ParamRef def)
+unify xRep yRep = do
   Lens.zoom gaUF $ do
     (rep, result) <- UFData.unifyRefs xRep yRep
     case result of
-      UFData.UnifyRefsAlreadyUnified ->
-        (,) rep <$> State.gets (UFData.readRep rep)
-      UFData.UnifyRefsUnified _ yRepGuid ->
-        (rep, yRepGuid) <$ UFData.writeRep rep yRepGuid
+      UFData.UnifyRefsUnified _ yRepGuid -> UFData.writeRep rep yRepGuid
+      UFData.UnifyRefsAlreadyUnified -> return ()
+    return rep
 
 guidOfRep :: ParamRef def -> GuidAliases def -> Guid
 guidOfRep rep guidAliases = UFData.readRep rep (guidAliases ^. gaUF)

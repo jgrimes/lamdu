@@ -11,9 +11,8 @@ import Data.Monoid (mappend)
 import Data.Store.Guid (Guid)
 import Lamdu.Data.ExampleDB (createBuiltins)
 import Lamdu.Data.Expr (Kind(..))
-import Lamdu.Data.Expr.IRef (DefI)
 import Lamdu.Data.Expr.Utils (pureHole, pureIntegerType)
-import Lamdu.Data.Infer.Deref (DerefedTV(..), Restriction(..), dValue, dType)
+import Lamdu.Data.Infer.Deref (Restriction(..))
 import qualified Control.Lens as Lens
 import qualified Data.List as List
 import qualified Data.Map as Map
@@ -161,12 +160,3 @@ canonizeDebug = ExprUtil.randomizeParamIdsG id ExprUtil.debugNameGen Map.empty (
 
 showDerefed :: Show def => Expr.Expr def Guid a -> String
 showDerefed = show . canonizeDebug . void
-
-showInferredValType :: Expr.Expr def par (DerefedTV (DefI t)) -> String
-showInferredValType expr =
-  unlines
-  [ "Inferred val:  " ++ showDerefed (derefed ^. dValue)
-  , "Inferred type: " ++ showDerefed (derefed ^. dType)
-  ]
-  where
-    derefed = expr ^. Expr.ePayload

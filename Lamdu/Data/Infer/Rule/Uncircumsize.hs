@@ -5,9 +5,8 @@ module Lamdu.Data.Infer.Rule.Uncircumsize
 import Control.Applicative ((<$))
 import Control.Lens.Operators
 import Control.Monad (void)
-import Data.Store.Guid (Guid)
 import Lamdu.Data.Infer.Monad (Infer)
-import Lamdu.Data.Infer.RefTags (ExprRef)
+import Lamdu.Data.Infer.RefTags (ExprRef, ParamRef)
 import Lamdu.Data.Infer.Rule.Func (RuleResult(..), RuleFunc)
 import Lamdu.Data.Infer.Unify (unify)
 import qualified Control.Lens as Lens
@@ -38,7 +37,7 @@ execute rule triggers =
 
 make ::
   ExprRef def -> ExprRef def ->
-  Expr.Body (RefData.LoadedDef def) Guid (ExprRef def) ->
+  Expr.Body (RefData.LoadedDef def) (ParamRef def) (ExprRef def) ->
   Infer def ()
 make valRef applicantValRef uncircumsizedValBody = do
   ruleRef <-

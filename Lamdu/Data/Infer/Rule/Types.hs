@@ -67,7 +67,7 @@ Lens.makeLenses ''ExprLink
 derive makeBinary ''ExprLink
 
 data Apply def = Apply
-  { _aPiGuid :: Guid
+  { _aPiGuid :: ParamRef def
   , _aArgVal :: ExprRef def
   -- unmaintained pi-result to apply type respective/matching subexprs
   , _aLinkedExprs :: OR.RefMap (TagExpr def) (ExprLink def)
@@ -79,7 +79,7 @@ derive makeBinary ''Apply
 data Uncircumsize def = Uncircumsize
   { _uValRef :: ExprRef def
   , _uApplicantValRef :: ExprRef def
-  , _uUncircumsizedBody :: Expr.Body (LoadedDef def) Guid (ExprRef def)
+  , _uUncircumsizedBody :: Expr.Body (LoadedDef def) (ParamRef def) (ExprRef def)
   }
 
 instance Show (Uncircumsize def) where

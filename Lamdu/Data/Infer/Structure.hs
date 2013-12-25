@@ -36,8 +36,7 @@ addToHole (TypedValue valRef typRef) = do
   valData <- Lens.zoom Context.ufExprs $ UFData.read valRef
   when (Lens.has (RefData.rdBody . ExprLens.bodyHole) valData) $ do
     -- Both the "stored" and inferred val are holes, time to fill some structure:
-    -- NOTE: safe to use 'deref []' because we don't care about the guids at all.
-    typExpr <- Deref.deref [] typRef <&> void
+    typExpr <- Deref.deref typRef <&> void
     structureRef <- Load.exprIntoContext scope (ExprUtil.structureForType typExpr)
     _ <- mapStateT assertSuccess $ Infer.unifyRefs valRef structureRef
     return ()

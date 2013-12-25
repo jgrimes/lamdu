@@ -12,11 +12,10 @@ import Control.MonadA (MonadA)
 import Data.Binary (Binary(..))
 import Data.Map (Map)
 import Data.Monoid (Monoid(..))
-import Data.Store.Guid (Guid)
 import Data.Typeable (Typeable)
 import Lamdu.Data.Infer.GuidAliases (GuidAliases)
 import Lamdu.Data.Infer.RefData (RefData, UFExprs, LoadedDef)
-import Lamdu.Data.Infer.RefTags (TagExpr, ExprRef)
+import Lamdu.Data.Infer.RefTags (TagExpr, ExprRef, ParamRef)
 import Lamdu.Data.Infer.Rule.Types (RuleMap, initialRuleMap)
 import Lamdu.Data.Infer.TypedValue (TypedValue)
 import System.Random.Utils () -- Binary StdGen
@@ -93,7 +92,7 @@ freshData refData = do
 
 fresh ::
   (Ord def, MonadA m) => RefData.Scope def ->
-  Expr.Body (LoadedDef def) Guid (ExprRef def) ->
+  Expr.Body (LoadedDef def) (ParamRef def) (ExprRef def) ->
   StateT (Context def) m (ExprRef def)
 fresh scop body = freshData $ RefData.defaultRefData scop body
 

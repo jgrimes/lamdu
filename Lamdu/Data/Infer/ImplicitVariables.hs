@@ -27,6 +27,7 @@ import qualified Lamdu.Data.Expr as Expr
 import qualified Lamdu.Data.Expr.Lens as ExprLens
 import qualified Lamdu.Data.Infer as Infer
 import qualified Lamdu.Data.Infer.Context as Context
+import qualified Lamdu.Data.Infer.GuidAliases as GuidAliases
 import qualified Lamdu.Data.Infer.LamWrap as LamWrap
 import qualified Lamdu.Data.Infer.Load as Load
 import qualified Lamdu.Data.Infer.Monad as InferM
@@ -49,16 +50,16 @@ outerLambdas f =
 add ::
   (Show def, Ord def, RandomGen gen) =>
   gen -> def ->
-  Expr.Expr (Load.LoadedDef def) Guid (TypedValue def, a) ->
+  Load.LoadedExpr def (TypedValue def, a) ->
   StateT (Context def) (Either (InferM.Error def))
-  (Expr.Expr (Load.LoadedDef def) Guid (TypedValue def, Payload a))
+  (Load.LoadedExpr def (TypedValue def, Payload a))
 add gen def expr =
   expr ^.. outerLambdas . Lens.traverse . Lens._1
   & traverse_ (onEachParamTypeSubexpr def)
   & (`execStateT` gen)
   & (`execStateT` (expr <&> Lens._2 %~ Stored))
 
-isUnrestrictedHole :: RefData ref -> Bool
+isUnrestrictedHole :: RefData def -> Bool
 isUnrestrictedHole refData =
   null (refData ^. RefData.rdRestrictions)
   && Lens.has (RefData.rdBody . ExprLens.bodyHole) refData
@@ -70,44 +71,51 @@ isUnrestrictedHole refData =
 onEachParamTypeSubexpr ::
   (Ord def, RandomGen gen) =>
   def -> TypedValue def ->
+  -- TODO: Remove the StateT gen
   StateT gen
-  (StateT (Expr.Expr (Load.LoadedDef def) Guid (TypedValue def, Payload a))
+  (StateT (Load.LoadedExpr def (TypedValue def, Payload a))
    (StateT (Context def)
     (Either (InferM.Error def)))) ()
 onEachParamTypeSubexpr def tv = do
   -- TODO: can use a cached deref here
   iValData <-
-    lift . lift . Lens.zoom Context.ufExprs . UFData.read $
+    liftContext . Lens.zoom Context.ufExprs . UFData.read $
     tv ^. TypedValue.tvVal
   when (isUnrestrictedHole iValData) $ do
-    paramId <- state random
+    -- TODO: Use fresh
+    paramGuid <- state random
+    paramId <-
+      liftContext . Lens.zoom Context.guidAliases $ GuidAliases.getRep paramGuid
     -- Make a new type ref for the implicit (we can't just re-use the
     -- given tv type ref because we need to intersect/restrict its
     -- scope)
     -- TODO: If this uses a scope-with-def, it will get itself in
     -- scope. If it doesn't, it won't get next variables in scope...
     implicitTypeRef <-
-      lift . lift $ Context.freshHole (RefData.emptyScope def)
+      liftContext $ Context.freshHole (RefData.emptyScope def)
     -- Wrap with (paramId:implicitTypeRef) lambda
+    let
+      -- TODO: AutoGen should not have Guid? Just make up guids in GUI?
+      newPayload Nothing = AutoGen $ Guid.augment "implicitLam" paramGuid
+      newPayload (Just x) = Stored x
     lift State.get
-      >>= lift . lift . LamWrap.lambdaWrap paramId implicitTypeRef
+      >>= liftContext . LamWrap.lambdaWrap paramId implicitTypeRef
       -- TODO: Is it OK that we use same AutoGen/guid for new Lam and
       -- new ParamType in here?
-      <&> Lens.mapped . Lens._2 %~ joinPayload . toPayload paramId
+      <&> Lens.mapped . Lens._2 %~ joinPayload . newPayload
       >>= lift . State.put
     varScope <-
-      lift . lift . Lens.zoom Context.ufExprs .
+      liftContext . Lens.zoom Context.ufExprs .
       fmap (^. RefData.rdScope) . UFData.read $ tv ^. TypedValue.tvVal
     -- implicitValRef <= getVar paramId
     implicitValRef <-
-      lift . lift . Load.exprIntoContext varScope $
+      liftContext . Load.exprIntoContext varScope $
       ExprLens.pureExpr . ExprLens.bodyParameterRef # paramId
     -- tv <- TV implicitValRef implicitTypeRef
     let implicit = TypedValue implicitValRef implicitTypeRef
-    void . lift . lift $ Infer.unify tv implicit
+    void . liftContext $ Infer.unify tv implicit
   where
-    toPayload paramId Nothing = AutoGen $ Guid.augment "implicitLam" paramId
-    toPayload _ (Just x) = Stored x
+    liftContext = lift . lift
 
 joinPayload :: Payload (Payload a) -> Payload a
 joinPayload (AutoGen guid) = AutoGen guid

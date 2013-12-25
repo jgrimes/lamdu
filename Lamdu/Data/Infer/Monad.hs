@@ -20,7 +20,7 @@ import Lamdu.Data.Expr.Utils () -- Expr.Body Show instance
 import Lamdu.Data.Infer.Context (Context)
 import Lamdu.Data.Infer.GuidAliases (GuidAliases)
 import Lamdu.Data.Infer.RefData (UFExprs, LoadedDef)
-import Lamdu.Data.Infer.RefTags (ExprRef, TagRule, TagExpr)
+import Lamdu.Data.Infer.RefTags (ExprRef, TagRule, TagExpr, ParamRef)
 import Lamdu.Data.Infer.Rule.Types (RuleRef, RuleMap)
 import Lamdu.Data.Infer.Trigger.Types (Fired)
 import qualified Control.Lens as Lens
@@ -37,8 +37,8 @@ data Error def
   | GetMissingField
   | GetFieldRequiresRecord
   | Mismatch
-    (Expr.Body (LoadedDef def) Guid (ExprRef def))
-    (Expr.Body (LoadedDef def) Guid (ExprRef def))
+    (Expr.Body (LoadedDef def) (ParamRef def) (ExprRef def))
+    (Expr.Body (LoadedDef def) (ParamRef def) (ExprRef def))
   deriving (Show)
 
 newtype TriggeredRules def = TriggeredRules

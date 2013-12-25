@@ -3,10 +3,9 @@ module Lamdu.Data.Infer.MakeTypes (makeTV) where
 import Control.Applicative (Applicative(..), (<$>))
 import Control.Lens.Operators
 import Control.Monad (void, when)
-import Data.Store.Guid (Guid)
 import Lamdu.Data.Infer.Monad (Infer, Error(..))
 import Lamdu.Data.Infer.RefData (Scope, scopeNormalizeParamRefs)
-import Lamdu.Data.Infer.RefTags (ExprRef)
+import Lamdu.Data.Infer.RefTags (ExprRef, ParamRef)
 import Lamdu.Data.Infer.Rule (verifyTagId)
 import Lamdu.Data.Infer.TypedValue (TypedValue(..), tvVal, tvType)
 import Lamdu.Data.Infer.Unify (unify, forceLam)
@@ -25,10 +24,10 @@ import qualified Lamdu.Data.Infer.Rule.GetField as RuleGetField
 import qualified Lamdu.Data.Infer.Rule.Uncircumsize as RuleUncircumsize
 import qualified Lamdu.Data.Infer.Trigger as Trigger
 
-scopeLookup :: Scope def -> Guid -> Infer def (ExprRef def)
-scopeLookup scope guid = do
+scopeLookup :: Scope def -> ParamRef def -> Infer def (ExprRef def)
+scopeLookup scope guidRef = do
   scopeNorm <- InferM.liftGuidAliases $ scopeNormalizeParamRefs scope
-  guidRep <- InferM.liftGuidAliases $ GuidAliases.getRep guid
+  guidRep <- InferM.liftGuidAliases $ GuidAliases.find guidRef
   case scopeNorm ^. RefData.scopeMap . Lens.at guidRep of
     Nothing -> InferM.error VarNotInScope
     Just ref -> pure ref
@@ -47,7 +46,7 @@ makePiTypeOfLam paramGuid paramType body =
 
 fresh ::
   Ord def =>
-  Scope def -> Expr.Body (Load.LoadedDef def) Guid (ExprRef def) ->
+  Scope def -> Expr.Body (Load.LoadedDef def) (ParamRef def) (ExprRef def) ->
   Infer def (ExprRef def)
 fresh scope body = InferM.liftContext $ Context.fresh scope body
 
@@ -55,7 +54,7 @@ maybeCircumsize ::
   Ord def =>
   Scope def ->
   TypedValue def ->
-  Expr.Body (Load.LoadedDef def) Guid (TypedValue def) ->
+  Expr.Body (Load.LoadedDef def) (ParamRef def) (TypedValue def) ->
   ExprRef def ->
   Infer def (TypedValue def)
 maybeCircumsize scope applicant uncircumsizedValBody typeRef = do
@@ -99,12 +98,12 @@ makeGetFieldTV scope getField@(Expr.GetField record tag) = do
   maybeCircumsize scope record (Expr.BodyGetField getField) getFieldTypeRef
 
 makeLambdaType ::
-  Ord def => Scope def -> Guid ->
+  Ord def => Scope def -> ParamRef def ->
   TypedValue def -> TypedValue def -> Infer def (ExprRef def)
-makeLambdaType scope paramGuid paramType result = do
+makeLambdaType scope paramGuidRef paramType result = do
   typeRef <- fresh scope $ ExprLens.bodyType # ()
   void . unify typeRef $ paramType ^. tvType
-  fresh scope $ makePiTypeOfLam paramGuid paramType result
+  fresh scope $ makePiTypeOfLam paramGuidRef paramType result
 
 makeRecordType ::
   Ord def => Expr.Kind -> Scope def ->
@@ -136,7 +135,7 @@ makePiType scope paramType resultType = do
 
 makeTV ::
   Ord def => Scope def ->
-  Expr.Body (Load.LoadedDef def) Guid (TypedValue def) ->
+  Expr.Body (Load.LoadedDef def) (ParamRef def) (TypedValue def) ->
   Infer def (TypedValue def)
 makeTV scope body =
   case body of

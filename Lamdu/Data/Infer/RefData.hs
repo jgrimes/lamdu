@@ -21,11 +21,10 @@ import Data.DeriveTH (derive)
 import Data.Monoid (Monoid(..))
 import Data.Monoid.Instances () -- Binary Any
 import Data.Set (Set)
-import Data.Store.Guid (Guid)
 import Data.Typeable (Typeable)
 import Data.UnionFind.WithData (UFData)
 import Lamdu.Data.Infer.GuidAliases (GuidAliases)
-import Lamdu.Data.Infer.RefTags (TagExpr, ExprRef, ParamRef, TagRule, TagParam)
+import Lamdu.Data.Infer.RefTags (TagExpr, ExprRef, ParamRef, TagRule, TagParam, ParamRef)
 import Lamdu.Data.Infer.Trigger.Types (Trigger)
 import qualified Control.Lens as Lens
 import qualified Data.Monoid as Monoid
@@ -65,22 +64,22 @@ derive makeBinary ''LoadedDef
 instance Eq def => Eq (LoadedDef def) where
   LoadedDef a _ == LoadedDef b _ = a == b
 
-type LoadedBody def = Expr.Body (LoadedDef def) Guid
-type LoadedExpr def = Expr.Expr (LoadedDef def) Guid
+type LoadedBody def = Expr.Body (LoadedDef def) (ParamRef def)
+type LoadedExpr def = Expr.Expr (LoadedDef def) (ParamRef def)
 
 data RefData def = RefData
   { _rdScope :: Scope def
   , _rdWasNotDirectlyTag :: Monoid.Any
   , _rdTriggers :: OR.RefMap (TagRule def) (Set (Trigger def))
   , _rdRestrictions :: [Restriction def]
-  , _rdBody :: Expr.Body (LoadedDef def) Guid (ExprRef def)
+  , _rdBody :: Expr.Body (LoadedDef def) (ParamRef def) (ExprRef def)
   }
 Lens.makeLenses ''RefData
 derive makeBinary ''RefData
 
 type UFExprs def = UFData (TagExpr def) (RefData def)
 
-defaultRefData :: Scope def -> Expr.Body (LoadedDef def) Guid (ExprRef def) -> RefData def
+defaultRefData :: Scope def -> Expr.Body (LoadedDef def) (ParamRef def) (ExprRef def) -> RefData def
 defaultRefData scop body = RefData
   { _rdScope = scop
   , _rdWasNotDirectlyTag = Monoid.Any False
